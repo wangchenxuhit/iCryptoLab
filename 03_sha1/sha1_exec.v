@@ -90,10 +90,10 @@ module sha1_exec (
   //
   reg  [1:0]     nstate;
   wire [1:0]     cstate; 
-  parameter      IDLE       = 2'b00;
-  parameter      CALC       = 2'b01;
-  parameter      VALID_OUT  = 2'b10;
-  parameter      VALID_OUT2 = 2'b11;
+  parameter      IDLE      = 2'b00;
+  parameter      CALCULATE = 2'b01;
+  parameter      FINAL_ADD = 2'b10;
+  parameter      VALID_OUT = 2'b11;
 
   //
   // The W round inputs are derived from the incoming message
@@ -111,7 +111,7 @@ module sha1_exec (
   //
   // Left Circular shift by 1 word 
   //
-  assign w_q_temp = (cstate == CALC) ? {w_q[479:0], w_q[511:480]} : w_q;
+  assign w_q_temp = (cstate == CALCULATE) ? {w_q[479:0], w_q[511:480]} : w_q;
 
   //
   // Select the incoming msg values or the computed ones
@@ -135,21 +135,20 @@ module sha1_exec (
   //
   // Accept the message input
   //
-  assign rnd_d = (cstate == CALC) ? sha1_round_wire :
-                 (use_prev_cv == 1'b1) ? cv_next_q : cv;
-
-  assign cv_d = (cstate == CALC) ? cv_q :
-                (use_prev_cv == 1'b1) ? cv_next_q : cv;
+  assign rnd_d = (cstate == CALCULATE) ? sha1_round_wire :
+                 (use_prev_cv) ? cv_next_q : cv;
 
   //
   // Calculate the final round...
   //
-  assign cv_next_d = (cstate == VALID_OUT) ? {cv_q[159:128] + rnd_q[159:128],
-                                              cv_q[127:096] + rnd_q[127:096],
-                                              cv_q[095:064] + rnd_q[095:064],
-                                              cv_q[063:032] + rnd_q[063:032],
-                                              cv_q[031:000] + rnd_q[031:000]} :
-                                              cv_next_q;
+  assign cv_next_d = (start && ~use_prev_cv) ? cv : 
+                     (cstate == FINAL_ADD) ? 
+                        {cv_next_q[159:128] + rnd_q[159:128],
+                         cv_next_q[127:096] + rnd_q[127:096],
+                         cv_next_q[095:064] + rnd_q[095:064],
+                         cv_next_q[063:032] + rnd_q[063:032],
+                         cv_next_q[031:000] + rnd_q[031:000]} :
+                         cv_next_q;
 
   //
   // Output the Hash
@@ -169,37 +168,37 @@ module sha1_exec (
         rnd_cnt_d = 7'b0000000;
         if ( start ) begin
           busy = 1'b1;
-          nstate = CALC;
+          nstate = CALCULATE;
         end
         else begin
           busy = 1'b0;
           nstate = IDLE;
         end
       end // case : IDLE
-      CALC : begin
+      CALCULATE : begin
         out_valid = 1'b0;
         busy = 1'b1;
         if ( rnd_cnt_q == 7'd79 ) begin
-          nstate = VALID_OUT;
+          nstate = FINAL_ADD;
           rnd_cnt_d = 7'b0000000;
         end
         else begin
-          nstate = CALC;
+          nstate = CALCULATE;
           rnd_cnt_d = rnd_cnt_q + 7'b0000001;
         end
-      end // case : CALC
+      end // case : CALCULATE
       //
       // Allow cycle to latch output
-      VALID_OUT : begin
+      FINAL_ADD : begin
         out_valid = 1'b0;
         busy = 1'b1;
-        nstate = VALID_OUT2; 
-      end // case : VALID_OUT
-      VALID_OUT2 : begin
+        nstate = VALID_OUT; 
+      end // case : FINAL_ADD
+      VALID_OUT : begin
         out_valid = 1'b1;
         busy = 1'b0;
         nstate = IDLE;
-      end // case : VALID_OUT2
+      end // case : VALID_OUT
       default : begin
         nstate = IDLE;
       end
@@ -209,18 +208,42 @@ module sha1_exec (
   //
   // State Elements...
   //
-  dffhr #(7)   rnd_cnt_reg (
-    .d(rnd_cnt_d), .q(rnd_cnt_q), .clk(clk), .r(reset));
-  dffhr #(2)   state_reg (
-    .d(nstate), .q(cstate), .clk(clk), .r(reset));
+  dffhr #(7) rnd_cnt_reg (
+    .d  ( rnd_cnt_d ), 
+    .q  ( rnd_cnt_q ), 
+    .clk( clk       ), 
+    .r  ( reset     )
+  );
+  dffhr #(2) state_reg (
+    .d  ( nstate ), 
+    .q  ( cstate ), 
+    .clk( clk    ), 
+    .r  ( reset  )
+  );
   dffhr #(512) w_reg (
-    .d(w_d), .q(w_q), .clk(clk), .r(reset));
-  dffhr #(160) cv_reg (
-    .d(cv_d), .q(cv_q), .clk(clk), .r(reset));
+    .d  ( w_d   ), 
+    .q  ( w_q   ), 
+    .clk( clk   ), 
+    .r  ( reset )
+  );
+  //dffhr #(160) cv_reg (
+  //  .d  ( cv_d  ), 
+  //  .q  ( cv_q  ), 
+  //  .clk( clk   ), 
+  //  .r  ( reset )
+  //);
   dffhr #(160) rnd_reg (
-    .d(rnd_d), .q(rnd_q), .clk(clk), .r(reset));
+    .d  ( rnd_d ), 
+    .q  ( rnd_q ), 
+    .clk( clk   ), 
+    .r  ( reset )
+  );
   dffhr #(160) cv_next_reg (
-    .d(cv_next_d), .q(cv_next_q), .clk(clk), .r(reset));
+    .d  ( cv_next_d ), 
+    .q  ( cv_next_q ), 
+    .clk( clk       ), 
+    .r  ( reset     )
+  );
 
 endmodule // sha1_exec
 

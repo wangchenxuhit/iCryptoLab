@@ -32,16 +32,16 @@ module test;
   reg           reset;
 
   sha1_exec dut (
-    .clk        (clk), 
-    .reset      (reset), 
-    .load_in    (load_in),
-    .data_in    (data_in), 
-    .start      (start),
-    .cv         (cv), 
+    .clk        (clk        ), 
+    .reset      (reset      ), 
+    .load_in    (load_in    ),
+    .data_in    (data_in    ), 
+    .start      (start      ),
+    .cv         (cv         ), 
     .use_prev_cv(use_prev_cv), 
-    .busy       (busy), 
-    .out_valid  (out_valid), 
-    .cv_next    (cv_next)
+    .busy       (busy       ), 
+    .out_valid  (out_valid  ), 
+    .cv_next    (cv_next    )
   );
 
   integer       i;
