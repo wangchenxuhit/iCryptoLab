@@ -88,15 +88,17 @@ module sha1_exec (
   //
   // FSM states
   //
-  reg  [1:0]     nstate;
-  wire [1:0]     cstate; 
-  parameter      IDLE      = 2'b00;
-  parameter      CALCULATE = 2'b01;
-  parameter      FINAL_ADD = 2'b10;
-  parameter      VALID_OUT = 2'b11;
+  reg  [2:0]     nstate;
+  wire [2:0]     cstate; 
+  parameter      IDLE      = 3'b000;
+  parameter      LOAD      = 3'b001;
+  parameter      WAIT      = 3'b010;
+  parameter      CALCULATE = 3'b011;
+  parameter      FINAL_ADD = 3'b100;
+  parameter      VALID_OUT = 3'b101;
 
   //
-  // The W round inputs are derived from the incoming message
+  // The w round inputs are derived from the incoming message
   //
   wire [511:0]   w_d;
   wire [511:0]   w_q;
@@ -158,25 +160,44 @@ module sha1_exec (
   //
   // FSM start at IDLE from reset
   //
-  always @( cstate or start or rnd_cnt_q ) begin
+  always @( cstate or load_in or start or rnd_cnt_q ) begin
     out_valid = 1'b0;
     busy = 1'b0;
     rnd_cnt_d = 7'b0000000;
     case ( cstate )
       IDLE : begin
-        out_valid = 1'b0;
-        rnd_cnt_d = 7'b0000000;
-        if ( start ) begin
+        if ( load_in ) begin
           busy = 1'b1;
-          nstate = CALCULATE;
+          nstate = LOAD;
+          $display("Enter LOAD state");
         end
         else begin
           busy = 1'b0;
           nstate = IDLE;
         end
       end // case : IDLE
+      LOAD : begin
+        busy = 1'b1;
+        if ( load_in ) begin
+          nstate = LOAD;
+        end
+        else if ( start ) begin
+          nstate = CALCULATE;
+        end
+        else begin
+          nstate = WAIT;
+        end
+      end // case : LOAD
+      WAIT : begin
+        busy = 1'b1;
+        if ( start ) begin
+          nstate = CALCULATE;
+        end
+        else begin
+          nstate = WAIT;
+        end
+      end // case : IDLE
       CALCULATE : begin
-        out_valid = 1'b0;
         busy = 1'b1;
         if ( rnd_cnt_q == 7'd79 ) begin
           nstate = FINAL_ADD;
@@ -214,7 +235,7 @@ module sha1_exec (
     .clk( clk       ), 
     .r  ( reset     )
   );
-  dffhr #(2) state_reg (
+  dffhr #(3) state_reg (
     .d  ( nstate ), 
     .q  ( cstate ), 
     .clk( clk    ), 
